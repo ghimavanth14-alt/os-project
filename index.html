@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GraphFlow — DAG File Organization</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04060d;--bg2:#080e1c;--bg3:#0c1424;--bg4:#10192e;--bg5:#141f38;
+  --border:#ffffff09;--border2:#ffffff12;--border3:#ffffff1e;--border4:#ffffff2c;
+  --text:#dde4f0;--text2:#7a8aaa;--text3:#3d4d6a;--text4:#1e2c45;
+  --accent:#4f8eff;--accent2:#7aaaff;--accent3:#a8c8ff;--accent-dim:#4f8eff14;--accent-glow:#4f8eff30;
+  --green:#10d97e;--green-dim:#10d97e14;--green-glow:#10d97e28;
+  --amber:#ffb340;--amber-dim:#ffb34014;
+  --red:#ff4f6b;--red-dim:#ff4f6b14;
+  --purple:#9b6dff;--purple-dim:#9b6dff14;
+  --teal:#00d4c8;--teal-dim:#00d4c814;
+  --pink:#ff6bbf;--pink-dim:#ff6bbf14;
+  --cyan:#00c8f0;--cyan-dim:#00c8f014;
+  --r:8px;--r2:12px;--r3:18px;--r4:24px;
+  --font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace;--serif:'Fraunces',serif;
+  --sh:0 0 0 1px var(--border2),0 8px 40px #00000080;
+  --sh2:0 0 0 1px var(--border3),0 20px 60px #00000090;
+}
+html,body,#root{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6}
+button{cursor:pointer;font-family:var(--font);border:none;background:none;color:inherit;font-size:14px}
+input,textarea,select{font-family:var(--font);font-size:14px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:9px 13px;outline:none;transition:all .2s;width:100%}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+input::placeholder,textarea::placeholder{color:var(--text3)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border3);border-radius:99px}
+::-webkit-scrollbar-thumb:hover{background:var(--border4)}
+
+/* ─── LAYOUT ─── */
+.shell{display:flex;height:100vh;overflow:hidden;position:relative}
+.sidebar{width:240px;min-width:240px;background:var(--bg2);border-right:1px solid var(--border2);display:flex;flex-direction:column;transition:all .3s;z-index:50}
+.sidebar.narrow{width:64px;min-width:64px}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:58px;min-height:58px;background:var(--bg2);border-bottom:1px solid var(--border2);display:flex;align-items:center;padding:0 20px;gap:12px;position:relative}
+.content-area{flex:1;display:flex;overflow:hidden}
+.content-scroll{flex:1;overflow-y:auto;overflow-x:hidden}
+
+/* ─── SIDEBAR ─── */
+.logo-wrap{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;min-height:58px}
+.logo-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;box-shadow:0 0 20px var(--accent-glow)}
+.logo-name{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;color:var(--text)}
+.logo-tag{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap}
+
+.nav-area{flex:1;overflow-y:auto;padding:12px 8px}
+.nav-section-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:8px 10px 5px;font-family:var(--mono);white-space:nowrap;overflow:hidden}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r);color:var(--text2);font-size:13.5px;cursor:pointer;transition:all .15s;white-space:nowrap;overflow:hidden;margin-bottom:1px;border:1px solid transparent;position:relative}
+.nav-btn:hover{background:var(--bg3);color:var(--text)}
+.nav-btn.on{background:var(--accent-dim);color:var(--accent2);border-color:var(--accent)20}
+.nav-btn .ni{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.nav-btn .badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;font-family:var(--mono)}
+.nav-btn .badge.g{background:var(--green)}
+
+.cat-pill{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r);cursor:pointer;color:var(--text2);font-size:12.5px;transition:all .15s;margin-bottom:1px;white-space:nowrap;overflow:hidden}
+.cat-pill:hover{background:var(--bg3);color:var(--text)}
+.cat-pill.on{background:var(--bg4)}
+.cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cat-count{margin-left:auto;font-size:11px;color:var(--text3);font-family:var(--mono)}
+
+.user-foot{padding:12px;border-top:1px solid var(--border);flex-shrink:0}
+.user-card{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r);cursor:pointer;transition:background .15s;overflow:hidden}
+.user-card:hover{background:var(--bg3)}
+.ava{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;flex-shrink:0;font-family:var(--mono)}
+
+/* ─── TOPBAR ─── */
+.toggle-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:var(--r);border:1px solid var(--border2);color:var(--text2);transition:all .15s;flex-shrink:0}
+.toggle-btn:hover{background:var(--bg3);color:var(--text)}
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text3)}
+.bc-sep{opacity:.4}
+.bc-link{color:var(--text2);cursor:pointer}
+.bc-link:hover{color:var(--text)}
+.bc-cur{color:var(--text);font-weight:500;cursor:default}
+.search-box{position:relative;flex:1;max-width:440px}
+.search-box input{padding-left:38px;background:var(--bg3);border-color:var(--border2)}
+.search-ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.tb-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:var(--r2);font-size:13px;font-weight:500;transition:all .18s;cursor:pointer;border:1px solid transparent;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 0 0 0 var(--accent-glow)}
+.btn-primary:hover{background:#3a7af0;box-shadow:0 0 24px var(--accent-glow)}
+.btn-ghost{background:transparent;color:var(--text2);border-color:var(--border2)}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);border-color:var(--border3)}
+.btn-danger{background:var(--red-dim);color:var(--red);border-color:var(--red)33}
+.btn-danger:hover{background:var(--red)22}
+.btn-sm{padding:5px 11px;font-size:12px;border-radius:var(--r)}
+.btn-xs{padding:3px 8px;font-size:11px;border-radius:6px}
+.vt{display:flex;gap:2px;background:var(--bg3);border-radius:var(--r);padding:3px;border:1px solid var(--border)}
+.vt-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text3);cursor:pointer;transition:all .15s;font-size:13px}
+.vt-btn.on{background:var(--bg2);color:var(--text);box-shadow:0 1px 4px #00000050}
+
+/* ─── STATS ─── */
+.stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border2);flex-shrink:0}
+.stat-cell{background:var(--bg2);padding:18px 20px}
+.stat-val{font-family:var(--serif);font-size:30px;font-weight:600;line-height:1;color:var(--text)}
+.stat-lbl{font-size:11px;color:var(--text3);margin-top:3px;font-family:var(--mono)}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:5px}
+
+/* ─── FILE GRID ─── */
+.page-header{padding:20px 24px 0;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.page-title{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--text)}
+.page-count{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;padding:16px 24px 24px}
+.fcard{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r3);padding:18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.fcard::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--accent-dim),transparent);opacity:0;transition:opacity .2s;pointer-events:none}
+.fcard:hover{border-color:var(--border4);transform:translateY(-2px);box-shadow:0 12px 40px #00000060}
+.fcard:hover::after{opacity:1}
+.fcard.sel{border-color:var(--accent)50;background:var(--accent-dim);box-shadow:0 0 0 1px var(--accent)30,0 12px 40px var(--accent-dim)}
+.ficon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px;flex-shrink:0}
+.fname{font-size:13px;font-weight:500;color:var(--text);margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fmeta{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.ftags{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:500;transition:all .15s;font-family:var(--mono)}
+
+/* ─── LIST VIEW ─── */
+.list-wrap{margin:16px 24px 24px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r3);overflow:hidden}
+.list-head{display:grid;grid-template-columns:1fr 110px 200px 80px 80px;padding:11px 18px;border-bottom:1px solid var(--border2);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;font-family:var(--mono)}
+.list-row{display:grid;grid-template-columns:1fr 110px 200px 80px 80px;padding:13px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;align-items:center}
+.list-row:last-child{border-bottom:none}
+.list-row:hover{background:var(--bg3)}
+.list-row.sel{background:var(--accent-dim)}
+
+/* ─── GRAPH ─── */
+.graph-wrap{width:100%;height:100%;position:relative;overflow:hidden}
+.graph-canvas{position:absolute;inset:0;background:var(--bg);background-image:radial-gradient(var(--border2) 1px,transparent 1px);background-size:28px 28px}
+.gnode{position:absolute;transform:translate(-50%,-50%);background:var(--bg2);border:1.5px solid var(--border2);border-radius:var(--r2);padding:12px 16px;cursor:grab;transition:border-color .2s,box-shadow .2s;min-width:130px;user-select:none;z-index:2}
+.gnode:active{cursor:grabbing}
+.gnode:hover,.gnode.active{border-color:var(--accent)80;box-shadow:0 0 0 3px var(--accent-dim),0 12px 40px #00000070;z-index:10}
+.gnode.catnode{border-style:dashed;background:var(--bg3)}
+.gnode .gn-icon{font-size:20px;margin-bottom:6px}
+.gnode .gn-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.gnode .gn-info{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.graph-toolbar{position:absolute;top:14px;left:14px;z-index:30;display:flex;gap:8px;align-items:center}
+.graph-legend{position:absolute;bottom:16px;left:16px;z-index:30;display:flex;gap:14px;font-size:11px;color:var(--text3);font-family:var(--mono)}
+.graph-controls{position:absolute;bottom:16px;right:16px;z-index:30;display:flex;flex-direction:column;gap:6px}
+
+/* ─── DETAIL PANEL ─── */
+.detail-panel{width:300px;min-width:300px;background:var(--bg2);border-left:1px solid var(--border2);overflow-y:auto;transition:width .3s,min-width .3s;flex-shrink:0}
+.detail-panel.gone{width:0;min-width:0;overflow:hidden}
+.dp-header{padding:18px 18px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.dp-body{padding:18px}
+.dp-sec{margin-bottom:20px}
+.dp-sec-title{font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:10px;font-family:var(--mono)}
+.dp-preview{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:24px;text-align:center;margin-bottom:20px}
+.dp-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)}
+.dp-row:last-child{border-bottom:none}
+.dp-key{color:var(--text3);font-family:var(--mono)}
+.dp-val{color:var(--text2)}
+
+/* ─── MODAL ─── */
+.modal-bg{position:fixed;inset:0;background:#000000b0;display:flex;align-items:center;justify-content:center;z-index:900;backdrop-filter:blur(6px);animation:fi .15s}
+.modal{background:var(--bg2);border:1px solid var(--border3);border-radius:var(--r4);padding:28px;min-width:460px;max-width:580px;width:90vw;max-height:88vh;overflow-y:auto;box-shadow:var(--sh2);animation:su .2s}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+@keyframes su{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.modal-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
+.modal-title{font-family:var(--serif);font-size:20px;font-weight:600;color:var(--text)}
+.close-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text3);transition:all .15s;flex-shrink:0}
+.close-btn:hover{background:var(--bg3);color:var(--text)}
+.fg{margin-bottom:16px}
+.fl{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:7px;font-family:var(--mono)}
+.fhint{font-size:11px;color:var(--text3);margin-top:5px}
+
+/* ─── DROP ZONE ─── */
+.dz{border:2px dashed var(--border3);border-radius:var(--r3);padding:40px;text-align:center;transition:all .2s;cursor:pointer}
+.dz:hover,.dz.over{border-color:var(--accent);background:var(--accent-dim)}
+.dz-icon{font-size:40px;margin-bottom:14px;opacity:.5}
+.dz-txt{color:var(--text2);font-size:14px}
+.dz-txt strong{color:var(--accent2)}
+.dz-sub{font-size:12px;color:var(--text3);margin-top:5px;font-family:var(--mono)}
+
+/* ─── PROGRESS ─── */
+.up-list{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.up-item{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px}
+.up-name{font-size:12px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar{height:3px;background:var(--border2);border-radius:99px;overflow:hidden;flex:1}
+.pfill{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.up-pct{font-size:11px;color:var(--text3);min-width:38px;text-align:right;font-family:var(--mono)}
+
+/* ─── CHIP INPUT ─── */
+.chip-wrap{display:flex;flex-wrap:wrap;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:8px;min-height:44px;cursor:text;transition:all .2s}
+.chip-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.chip-inner{border:none;background:none;outline:none;color:var(--text);font-size:13px;flex:1;min-width:90px;font-family:var(--font)}
+
+/* ─── CONN PICKER ─── */
+.conn-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r);cursor:pointer;transition:background .15s}
+.conn-item:hover{background:var(--bg4)}
+.conn-chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;transition:all .15s}
+.conn-chk.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ─── TOAST ─── */
+.toast-tray{position:fixed;bottom:22px;right:22px;z-index:9999;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.toast{background:var(--bg2);border:1px solid var(--border3);border-radius:var(--r2);padding:11px 15px;font-size:13px;box-shadow:var(--sh2);display:flex;align-items:center;gap:10px;animation:su .2s;max-width:300px;cursor:pointer}
+.toast.ok{border-left:3px solid var(--green)}
+.toast.err{border-left:3px solid var(--red)}
+.toast.inf{border-left:3px solid var(--accent)}
+
+/* ─── SEARCH RESULTS ─── */
+.sresult{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:var(--r);cursor:pointer;transition:background .15s}
+.sresult:hover{background:var(--bg3)}
+.shigh{color:var(--accent2);font-weight:600}
+
+/* ─── EMPTY ─── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;gap:16px;padding:60px 40px}
+.empty-ico{font-size:52px;opacity:.25}
+.empty-title{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--text2)}
+.empty-sub{font-size:14px;color:var(--text3);max-width:280px;line-height:1.7}
+
+/* ─── CONTEXT MENU ─── */
+.ctxm{position:fixed;background:var(--bg2);border:1px solid var(--border3);border-radius:var(--r2);padding:6px;min-width:180px;z-index:5000;box-shadow:var(--sh2);animation:fi .1s}
+.ctxm-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r);cursor:pointer;font-size:13px;color:var(--text2);transition:background .1s}
+.ctxm-item:hover{background:var(--bg3);color:var(--text)}
+.ctxm-sep{height:1px;background:var(--border);margin:4px 0}
+.ctxm-danger{color:var(--red)}
+.ctxm-danger:hover{background:var(--red-dim)}
+
+/* ─── AUTH ─── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);position:relative;overflow:hidden}
+.auth-glow{position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent-dim),transparent 70%);top:-100px;left:-100px;pointer-events:none}
+.auth-glow2{position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,var(--purple-dim),transparent 70%);bottom:-50px;right:-50px;pointer-events:none}
+.auth-card{background:var(--bg2);border:1px solid var(--border3);border-radius:var(--r4);padding:40px;width:100%;max-width:420px;position:relative;z-index:1;box-shadow:var(--sh2)}
+.auth-logo{display:flex;align-items:center;gap:14px;margin-bottom:32px}
+.auth-lmark{width:48px;height:48px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 0 30px var(--accent-glow)}
+.auth-name{font-family:var(--serif);font-size:24px;font-weight:600;color:var(--text)}
+.auth-sub-txt{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.auth-divider{display:flex;align-items:center;gap:12px;color:var(--text3);font-size:12px;margin:16px 0;font-family:var(--mono)}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.social-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:11px;border:1px solid var(--border2);border-radius:var(--r2);color:var(--text);transition:all .18s;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font);background:var(--bg3)}
+.social-btn:hover{background:var(--bg4);border-color:var(--border3)}
+.inp-wrap{position:relative;display:flex;align-items:center}
+.inp-wrap input{padding-left:40px}
+.inp-ico{position:absolute;left:13px;color:var(--text3);font-size:14px;z-index:1;pointer-events:none}
+
+/* ─── TABS ─── */
+.tabs{display:flex;gap:2px;background:var(--bg3);border-radius:var(--r);padding:3px;border:1px solid var(--border)}
+.tab{padding:7px 16px;border-radius:7px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;font-weight:400}
+.tab.on{background:var(--bg2);color:var(--text);font-weight:500;box-shadow:0 1px 4px #00000050}
+
+/* ─── ACTIVITY ─── */
+.act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.act-item:last-child{border-bottom:none}
+.act-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.act-txt{font-size:12.5px;color:var(--text2)}
+.act-time{font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--mono)}
+
+/* ─── DASHBOARD GRID ─── */
+.dash-grid{display:grid;grid-template-columns:1fr 310px;gap:24px;padding:24px}
+.section-title{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--text);margin-bottom:16px}
+.mini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.rank-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);cursor:pointer;transition:all .15s;margin-bottom:8px}
+.rank-item:hover{background:var(--bg4);border-color:var(--border3)}
+.rank-num{font-size:12px;font-weight:700;color:var(--text3);min-width:18px;text-align:right;font-family:var(--mono)}
+
+/* ─── GRAPH MINI ─── */
+.gm-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:900px){
+  .sidebar{position:absolute;z-index:100;height:100%;transform:translateX(0)}
+  .sidebar.narrow{transform:translateX(-100%)}
+  .stats-strip{grid-template-columns:repeat(2,1fr)}
+  .file-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .detail-panel{position:absolute;right:0;top:0;height:100%;z-index:80}
+  .dash-grid{grid-template-columns:1fr}
+  .modal{min-width:unset;width:95vw;padding:22px}
+  .list-head,.list-row{grid-template-columns:1fr 90px 80px}
+}
+@media(max-width:600px){
+  .stats-strip{grid-template-columns:repeat(2,1fr)}
+  .topbar{padding:0 12px;gap:8px}
+  .search-box{max-width:180px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+/* ══════════════════ CONSTANTS ══════════════════ */
+const FILE_TYPES={
+  pdf:{icon:'📄',color:'#ff4f6b',label:'PDF'},
+  docx:{icon:'📝',color:'#4f8eff',label:'Word'},doc:{icon:'📝',color:'#4f8eff',label:'Word'},
+  xlsx:{icon:'📊',color:'#10d97e',label:'Excel'},csv:{icon:'📊',color:'#10d97e',label:'CSV'},
+  png:{icon:'🖼️',color:'#9b6dff',label:'Image'},jpg:{icon:'🖼️',color:'#9b6dff',label:'Image'},jpeg:{icon:'🖼️',color:'#9b6dff',label:'Image'},
+  gif:{icon:'🎞️',color:'#ff6bbf',label:'GIF'},webp:{icon:'🖼️',color:'#9b6dff',label:'Image'},
+  mp4:{icon:'🎬',color:'#ffb340',label:'Video'},mov:{icon:'🎬',color:'#ffb340',label:'Video'},
+  mp3:{icon:'🎵',color:'#00d4c8',label:'Audio'},wav:{icon:'🎵',color:'#00d4c8',label:'Audio'},
+  zip:{icon:'📦',color:'#7a8aaa',label:'Archive'},rar:{icon:'📦',color:'#7a8aaa',label:'Archive'},
+  js:{icon:'⚡',color:'#ffb340',label:'JS'},ts:{icon:'⚡',color:'#4f8eff',label:'TS'},
+  py:{icon:'🐍',color:'#10d97e',label:'Python'},java:{icon:'☕',color:'#ff6b35',label:'Java'},
+  md:{icon:'📋',color:'#7a8aaa',label:'Markdown'},txt:{icon:'📃',color:'#7a8aaa',label:'Text'},
+  pptx:{icon:'📊',color:'#ffb340',label:'Slides'},html:{icon:'🌐',color:'#ff6b35',label:'HTML'},
+  default:{icon:'📁',color:'#7a8aaa',label:'File'}
+};
+const getFT=name=>{const e=name.split('.').pop()?.toLowerCase();return FILE_TYPES[e]||FILE_TYPES.default};
+const fmtSz=b=>{if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB'};
+const fmtDt=d=>new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+const ago=t=>{const s=Math.floor((Date.now()-t)/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'};
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+const CAT_COLORS=['#4f8eff','#10d97e','#9b6dff','#ffb340','#00d4c8','#ff6bbf','#ff4f6b','#00c8f0'];
+const CATS=[
+  {id:'c1',name:'Machine Learning',color:'#4f8eff'},
+  {id:'c2',name:'Research',color:'#9b6dff'},
+  {id:'c3',name:'Projects',color:'#10d97e'},
+  {id:'c4',name:'Work',color:'#ffb340'},
+  {id:'c5',name:'College Notes',color:'#00d4c8'},
+  {id:'c6',name:'Notes',color:'#ff6bbf'},
+  {id:'c7',name:'Finance',color:'#ff4f6b'},
+  {id:'c8',name:'Code',color:'#7a8aaa'},
+];
+const FILES0=[
+  {id:'f1',name:'AI Research Notes.pdf',size:2457600,tags:['Machine Learning','Research','Notes'],connections:['f3','f5'],created:Date.now()-864e5,accessed:Date.now()-36e5,views:42,desc:'Comprehensive notes on transformer architectures and attention mechanisms'},
+  {id:'f2',name:'Project Proposal.docx',size:184320,tags:['Projects','Work'],connections:['f4','f6'],created:Date.now()-432e5,accessed:Date.now()-72e5,views:18,desc:'Q4 project proposal with timeline and resource allocation'},
+  {id:'f3',name:'Neural Networks.pdf',size:3276800,tags:['Machine Learning','College Notes'],connections:['f1','f5'],created:Date.now()-1728e5,accessed:Date.now()-144e5,views:67,desc:'Deep dive into backpropagation and activation functions'},
+  {id:'f4',name:'Budget Analysis.xlsx',size:92160,tags:['Finance','Projects','Work'],connections:['f2'],created:Date.now()-216e5,accessed:Date.now()-18e5,views:29,desc:'Q3 and Q4 budget breakdown by department'},
+  {id:'f5',name:'Research Methodology.pdf',size:1638400,tags:['Research','College Notes'],connections:['f1','f3'],created:Date.now()-2592e5,accessed:Date.now()-288e5,views:53,desc:'Qualitative vs quantitative research methods comparison'},
+  {id:'f6',name:'Team Meeting Notes.md',size:45056,tags:['Work','Notes'],connections:['f2'],created:Date.now()-108e5,accessed:Date.now()-9e5,views:11,desc:'Weekly standup notes and action items for Q4 sprint'},
+  {id:'f7',name:'data_pipeline.py',size:32768,tags:['Projects','Code'],connections:[],created:Date.now()-54e5,accessed:Date.now()-5400,views:8,desc:'Data preprocessing and visualization helper scripts'},
+  {id:'f8',name:'Literature Review.docx',size:409600,tags:['Research','College Notes','Notes'],connections:['f5'],created:Date.now()-345600e2,accessed:Date.now()-432e5,views:34,desc:'Survey of existing literature on NLP and language modeling'},
+  {id:'f9',name:'Presentation Deck.pptx',size:5120000,tags:['Work','Projects'],connections:['f2','f4'],created:Date.now()-54e5,accessed:Date.now()-7200,views:22,desc:'Quarterly review slides for stakeholder meeting'},
+  {id:'f10',name:'dataset_v2.csv',size:1024000,tags:['Machine Learning','Code'],connections:['f7'],created:Date.now()-86400,accessed:Date.now()-3600,views:15,desc:'Cleaned training dataset with feature engineering applied'},
+];
+const ACTS=[
+  {id:'a1',text:'Uploaded AI Research Notes.pdf',time:Date.now()-36e5,type:'upload'},
+  {id:'a2',text:'Linked Neural Networks → AI Research Notes',time:Date.now()-72e5,type:'link'},
+  {id:'a3',text:'Added tag "Machine Learning" to 3 files',time:Date.now()-144e5,type:'tag'},
+  {id:'a4',text:'Uploaded Budget Analysis.xlsx',time:Date.now()-18e5,type:'upload'},
+  {id:'a5',text:'Created new category "College Notes"',time:Date.now()-216e5,type:'cat'},
+  {id:'a6',text:'Uploaded data_pipeline.py',time:Date.now()-54e5,type:'upload'},
+];
+
+/* ══════════════════ TOAST HOOK ══════════════════ */
+function useToast(){
+  const[toasts,setToasts]=useState([]);
+  const toast=useCallback((msg,type='inf')=>{
+    const id=uid();
+    setToasts(p=>[...p,{id,msg,type}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3800);
+  },[]);
+  const dismiss=id=>setToasts(p=>p.filter(t=>t.id!==id));
+  return{toasts,toast,dismiss};
+}
+function Toasts({toasts,dismiss}){
+  return <div className="toast-tray">{toasts.map(t=>(
+    <div key={t.id} className={`toast ${t.type}`} onClick={()=>dismiss(t.id)}>
+      <span style={{fontSize:16}}>{t.type==='ok'?'✓':t.type==='err'?'✕':'●'}</span>
+      <span>{t.msg}</span>
+    </div>
+  ))}</div>;
+}
+
+/* ══════════════════ AUTH ══════════════════ */
+function Auth({onAuth}){
+  const[mode,setMode]=useState('login');
+  const[email,setEmail]=useState('demo@graphflow.io');
+  const[pass,setPass]=useState('');
+  const[name,setName]=useState('');
+  const[loading,setLoading]=useState(false);
+  const submit=async e=>{
+    e.preventDefault();setLoading(true);
+    await new Promise(r=>setTimeout(r,900));
+    setLoading(false);
+    onAuth({name:name||'Alex Morgan',email,ava:(name||'Alex Morgan').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()});
+  };
+  return(
+    <div className="auth-wrap">
+      <div className="auth-glow"/><div className="auth-glow2"/>
+      <div className="auth-card">
+        <div className="auth-logo">
+          <div className="auth-lmark">⬡</div>
+          <div>
+            <div className="auth-name">GraphFlow</div>
+            <div className="auth-sub-txt">// dag-powered file intelligence</div>
+          </div>
+        </div>
+        <div style={{marginBottom:22}}>
+          <div className="tabs" style={{width:'fit-content'}}>
+            <div className={`tab${mode==='login'?' on':''}`} onClick={()=>setMode('login')}>Sign in</div>
+            <div className={`tab${mode==='reg'?' on':''}`} onClick={()=>setMode('reg')}>Create account</div>
+          </div>
+        </div>
+        <button className="social-btn" style={{marginBottom:8}} onClick={submit} type="button">
+          <span style={{fontWeight:700,color:'#4285f4',fontSize:16}}>G</span> Continue with Google
+        </button>
+        <div className="auth-divider">or with email</div>
+        <form onSubmit={submit}>
+          {mode==='reg'&&(
+            <div className="fg">
+              <label className="fl">Full name</label>
+              <div className="inp-wrap"><span className="inp-ico">👤</span>
+                <input value={name} onChange={e=>setName(e.target.value)} placeholder="Alex Morgan"/>
+              </div>
+            </div>
+          )}
+          <div className="fg">
+            <label className="fl">Email address</label>
+            <div className="inp-wrap"><span className="inp-ico">✉</span>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" required/>
+            </div>
+          </div>
+          <div className="fg">
+            <label className="fl">Password</label>
+            <div className="inp-wrap"><span className="inp-ico">🔒</span>
+              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" required/>
+            </div>
+          </div>
+          {mode==='login'&&<div style={{textAlign:'right',marginTop:-8,marginBottom:16}}><span style={{color:'var(--accent2)',fontSize:12,cursor:'pointer',fontFamily:'var(--mono)'}}>forgot password?</span></div>}
+          <button type="submit" className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px'}} disabled={loading}>
+            {loading?'Authenticating…':mode==='login'?'Sign in →':'Create account →'}
+          </button>
+        </form>
+        <p style={{marginTop:18,fontSize:11,color:'var(--text3)',textAlign:'center',fontFamily:'var(--mono)'}}>
+          By continuing you agree to our <span style={{color:'var(--accent2)',cursor:'pointer'}}>Terms</span> & <span style={{color:'var(--accent2)',cursor:'pointer'}}>Privacy</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ GRAPH VIEW ══════════════════ */
+function GraphView({files,cats,onSelect,active,toast}){
+  const[scale,setScale]=useState(1);
+  const[off,setOff]=useState({x:0,y:0});
+  const[drag,setDrag]=useState(null);
+  const[panning,setPanning]=useState(false);
+  const[panStart,setPanStart]=useState(null);
+  const[pos,setPos]=useState({});
+  const[showCats,setShowCats]=useState(true);
+  const[hovEdge,setHovEdge]=useState(null);
+  const cRef=useRef();
+
+  useEffect(()=>{
+    const p={};const cx=560,cy=320,r=230;
+    files.forEach((f,i)=>{
+      const a=(i/files.length)*Math.PI*2-Math.PI/2;
+      p[f.id]={x:cx+Math.cos(a)*r*(0.75+Math.random()*0.5),y:cy+Math.sin(a)*r*(0.75+Math.random()*0.5)};
+    });
+    if(showCats){
+      const cr=130;
+      cats.forEach((c,i)=>{
+        const a=(i/cats.length)*Math.PI*2-Math.PI/2;
+        p[c.id]={x:cx+Math.cos(a)*(r+cr),y:cy+Math.sin(a)*(r+cr)};
+      });
+    }
+    setPos(p);
+  },[files.length,cats.length,showCats]);
+
+  const edges=useMemo(()=>{
+    const res=[];
+    files.forEach(f=>{
+      (f.connections||[]).forEach(tid=>{
+        if(files.find(x=>x.id===tid))res.push({from:f.id,to:tid,cat:false});
+      });
+      if(showCats){
+        f.tags.forEach(tag=>{
+          const c=cats.find(x=>x.name===tag);
+          if(c)res.push({from:f.id,to:c.id,cat:true});
+        });
+      }
+    });
+    return res;
+  },[files,cats,showCats]);
+
+  const gp=id=>pos[id]||{x:560,y:320};
+
+  const onNodeDown=(e,id)=>{
+    e.stopPropagation();
+    setDrag({id,sx:e.clientX,sy:e.clientY,ox:pos[id]?.x||0,oy:pos[id]?.y||0});
+  };
+  const onBgDown=e=>{
+    if(e.target===cRef.current||e.currentTarget===cRef.current){
+      setPanning(true);setPanStart({x:e.clientX-off.x,y:e.clientY-off.y});
+    }
+  };
+  const onMove=e=>{
+    if(drag){
+      const dx=(e.clientX-drag.sx)/scale,dy=(e.clientY-drag.sy)/scale;
+      setPos(p=>({...p,[drag.id]:{x:drag.ox+dx,y:drag.oy+dy}}));
+    }else if(panning&&panStart){
+      setOff({x:e.clientX-panStart.x,y:e.clientY-panStart.y});
+    }
+  };
+  const onUp=()=>{setDrag(null);setPanning(false)};
+
+  const renderEdge=(edge,i)=>{
+    const f=gp(edge.from),t=gp(edge.to);
+    const dx=t.x-f.x,dy=t.y-f.y,dist=Math.sqrt(dx*dx+dy*dy)||1;
+    const ux=dx/dist,uy=dy/dist;
+    const x1=f.x+ux*68,y1=f.y+uy*68,x2=t.x-ux*68,y2=t.y-uy*68;
+    const mx=(x1+x2)/2-dy*.1,my=(y1+y2)/2+dx*.1;
+    const hl=hovEdge===i||active?.id===edge.from||active?.id===edge.to;
+    const col=hl?(edge.cat?'var(--teal)':'var(--accent)'):(edge.cat?'#1e2c45':'#0c1424');
+    return(
+      <g key={i} onMouseEnter={()=>setHovEdge(i)} onMouseLeave={()=>setHovEdge(null)} style={{pointerEvents:'stroke'}}>
+        <path d={`M${x1},${y1}Q${mx},${my}${x2},${y2}`}
+          stroke={col} strokeWidth={hl?2.5:1.5} fill="none"
+          strokeDasharray={edge.cat?'6,4':undefined} strokeOpacity={hl?1:.5}
+          style={{transition:'stroke .2s,stroke-width .2s'}}/>
+        {hl&&<path d={`M${x2-ux*6-uy*4},${y2-uy*6+ux*4}L${x2},${y2}L${x2-ux*6+uy*4},${y2-uy*6-ux*4}`}
+          stroke={col} strokeWidth="2" fill="none" strokeLinecap="round"/>}
+      </g>
+    );
+  };
+
+  return(
+    <div style={{position:'relative',width:'100%',height:'100%',display:'flex',flexDirection:'column'}}>
+      <div style={{padding:'10px 16px',borderBottom:'1px solid var(--border2)',display:'flex',gap:8,alignItems:'center',background:'var(--bg2)',flexShrink:0}}>
+        <span style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>// graph explorer</span>
+        <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
+          <label style={{display:'flex',alignItems:'center',gap:7,fontSize:12,color:'var(--text3)',cursor:'pointer',fontFamily:'var(--mono)'}}>
+            <input type="checkbox" checked={showCats} onChange={e=>setShowCats(e.target.checked)} style={{width:'auto'}}/>
+            categories
+          </label>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setScale(s=>Math.min(2.5,s+.2))}>＋</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setScale(s=>Math.max(.25,s-.2))}>－</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setScale(1);setOff({x:0,y:0})}}>⊙ reset</button>
+          <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',minWidth:38}}>{Math.round(scale*100)}%</span>
+        </div>
+      </div>
+      <div ref={cRef} className="graph-canvas" style={{flex:1,cursor:panning?'grabbing':drag?'grabbing':'grab',userSelect:'none'}}
+        onMouseDown={onBgDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}>
+        <div style={{transform:`translate(${off.x}px,${off.y}px) scale(${scale})`,transformOrigin:'0 0',position:'absolute',inset:0,willChange:'transform'}}>
+          <svg style={{position:'absolute',inset:0,overflow:'visible',width:'100%',height:'100%',pointerEvents:'none'}}>
+            {edges.map(renderEdge)}
+          </svg>
+          {files.map(f=>{
+            const p=gp(f.id),ft=getFT(f.name),sel=active?.id===f.id;
+            return(
+              <div key={f.id} className={`gnode${sel?' active':''}`}
+                style={{left:p.x,top:p.y,borderColor:sel?'var(--accent)':ft.color+'50',boxShadow:sel?`0 0 0 3px ${ft.color}18,0 8px 32px #00000080`:undefined}}
+                onMouseDown={e=>onNodeDown(e,f.id)} onClick={()=>onSelect(f)}>
+                <div className="gn-icon">{ft.icon}</div>
+                <div className="gn-name">{f.name}</div>
+                <div className="gn-info">{fmtSz(f.size)} · {f.connections?.length||0} links</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:7}}>
+                  {f.tags.slice(0,2).map(t=>{const c=cats.find(x=>x.name===t);return(
+                    <span key={t} style={{background:(c?.color||'#4f8eff')+'20',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}30`,borderRadius:99,fontSize:10,padding:'1px 7px',fontFamily:'var(--mono)'}}>
+                      {t}
+                    </span>
+                  )})}
+                  {f.tags.length>2&&<span style={{fontSize:10,color:'var(--text3)'}}> +{f.tags.length-2}</span>}
+                </div>
+              </div>
+            );
+          })}
+          {showCats&&cats.map(c=>{
+            const p=gp(c.id),cnt=files.filter(f=>f.tags.includes(c.name)).length;
+            return(
+              <div key={c.id} className="gnode catnode" style={{left:p.x,top:p.y,borderColor:c.color+'60'}}
+                onMouseDown={e=>onNodeDown(e,c.id)}>
+                <div className="gn-icon" style={{fontSize:14}}>🏷</div>
+                <div className="gn-name" style={{color:c.color}}>{c.name}</div>
+                <div className="gn-info">{cnt} files</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{position:'absolute',bottom:14,left:14,display:'flex',gap:16,fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',pointerEvents:'none'}}>
+        <span>─── file link</span>
+        <span style={{display:'flex',alignItems:'center',gap:6}}>
+          <span style={{display:'inline-block',width:20,borderTop:'2px dashed var(--text4)'}}/> category
+        </span>
+      </div>
+      <div style={{position:'absolute',bottom:14,right:14,fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>
+        {files.length} nodes · {edges.filter(e=>!e.cat).length} edges
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ FILE CARD ══════════════════ */
+function FCard({file,cats,onSelect,onCtx,sel}){
+  const ft=getFT(file.name);
+  return(
+    <div className={`fcard${sel?' sel':''}`} onClick={()=>onSelect(file)} onContextMenu={e=>onCtx(e,file)}>
+      <div className="ficon" style={{background:ft.color+'1a'}}>{ft.icon}</div>
+      <div className="fname" title={file.name}>{file.name}</div>
+      <div className="fmeta">{fmtSz(file.size)} · {ago(file.accessed)}</div>
+      <div className="ftags" style={{marginTop:10}}>
+        {file.tags.slice(0,3).map(t=>{const c=cats.find(x=>x.name===t);return(
+          <span key={t} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontFamily:'var(--mono)'}}>
+            {t}
+          </span>
+        )})}
+        {file.tags.length>3&&<span className="tag" style={{background:'var(--bg4)',color:'var(--text3)',fontFamily:'var(--mono)'}}>+{file.tags.length-3}</span>}
+      </div>
+      <div style={{marginTop:10,display:'flex',gap:10,fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>
+        <span>⬡ {file.connections?.length||0}</span>
+        <span>👁 {file.views}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ UPLOAD MODAL ══════════════════ */
+function UploadModal({cats,onClose,onUpload,toast}){
+  const[over,setOver]=useState(false);
+  const[staged,setStaged]=useState([]);
+  const[tags,setTags]=useState([]);
+  const[ti,setTi]=useState('');
+  const[uploading,setUploading]=useState(false);
+  const[prog,setProg]=useState({});
+  const fRef=useRef();
+  const add=files=>setStaged(p=>[...p,...Array.from(files).map(f=>({id:uid(),file:f,name:f.name,size:f.size}))]);
+  const addTag=()=>{if(ti.trim()&&!tags.includes(ti.trim())){setTags(p=>[...p,ti.trim()]);setTi('')}};
+  const doUp=async()=>{
+    if(!staged.length)return;
+    setUploading(true);
+    const pr={};staged.forEach(f=>pr[f.id]=0);setProg(pr);
+    for(const f of staged){
+      for(let i=0;i<=100;i+=Math.ceil(10+Math.random()*15)){
+        await new Promise(r=>setTimeout(r,50));
+        setProg(p=>({...p,[f.id]:Math.min(100,i)}));
+      }
+      setProg(p=>({...p,[f.id]:100}));
+      onUpload({id:uid(),name:f.name,size:f.size,tags,connections:[],created:Date.now(),accessed:Date.now(),views:0,desc:''});
+    }
+    toast(`${staged.length} file${staged.length!==1?'s':''} uploaded`,'ok');
+    onClose();
+  };
+  return(
+    <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-hd">
+          <div className="modal-title">Upload Files</div>
+          <button className="close-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className={`dz${over?' over':''}`}
+          onDragOver={e=>{e.preventDefault();setOver(true)}} onDragLeave={()=>setOver(false)}
+          onDrop={e=>{e.preventDefault();setOver(false);add(e.dataTransfer.files)}}
+          onClick={()=>fRef.current.click()}>
+          <div className="dz-icon">⬆️</div>
+          <div className="dz-txt"><strong>Drop files here</strong> or click to browse</div>
+          <div className="dz-sub">PDF, DOCX, images, spreadsheets, code • Max 100MB each</div>
+          <input ref={fRef} type="file" multiple style={{display:'none'}} onChange={e=>add(e.target.files)}/>
+        </div>
+        {staged.length>0&&(
+          <div className="up-list">
+            {staged.map(f=>(
+              <div key={f.id} className="up-item">
+                <span style={{fontSize:18}}>{getFT(f.name).icon}</span>
+                <span className="up-name">{f.name}</span>
+                <span style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',flexShrink:0}}>{fmtSz(f.size)}</span>
+                {uploading
+                  ?<><div className="pbar"><div className="pfill" style={{width:(prog[f.id]||0)+'%',background:prog[f.id]===100?'var(--green)':'var(--accent)'}}/></div>
+                    <span className="up-pct">{prog[f.id]||0}%</span></>
+                  :<button onClick={()=>setStaged(p=>p.filter(x=>x.id!==f.id))} style={{color:'var(--text3)',marginLeft:'auto'}}>✕</button>
+                }
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{marginTop:20}}>
+          <div className="fg">
+            <label className="fl">Tags / Categories</label>
+            <div className="chip-wrap" onClick={()=>document.getElementById('tag-i')?.focus()}>
+              {tags.map(t=>(
+                <span key={t} className="tag" style={{background:'var(--accent-dim)',color:'var(--accent2)',border:'1px solid var(--accent)28',fontFamily:'var(--mono)'}}>
+                  {t}<span style={{opacity:.6,cursor:'pointer',marginLeft:5}} onClick={()=>setTags(p=>p.filter(x=>x!==t))}>✕</span>
+                </span>
+              ))}
+              <input id="tag-i" className="chip-inner" value={ti} onChange={e=>setTi(e.target.value)}
+                placeholder="Add tag…" onKeyDown={e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();addTag()}}}/>
+            </div>
+            <div className="fhint">Quick add: {cats.slice(0,5).map(c=>(
+              <span key={c.id} style={{color:c.color,cursor:'pointer',marginRight:8}} onClick={()=>!tags.includes(c.name)&&setTags(p=>[...p,c.name])}>{c.name}</span>
+            ))}</div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:22}}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={doUp} disabled={!staged.length||uploading}>
+            {uploading?'Uploading…':`Upload ${staged.length||''} File${staged.length!==1?'s':''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ DETAIL PANEL ══════════════════ */
+function Detail({file,files,cats,onClose,onUpdate,onDelete,toast}){
+  const[editing,setEditing]=useState(false);
+  const[eName,setEName]=useState(file.name);
+  const[eDesc,setEDesc]=useState(file.desc||'');
+  const[ti,setTi]=useState('');
+  const[showConn,setShowConn]=useState(false);
+  const ft=getFT(file.name);
+  const conns=files.filter(f=>(file.connections||[]).includes(f.id));
+  const revConns=files.filter(f=>(f.connections||[]).includes(file.id)&&!(file.connections||[]).includes(f.id));
+
+  const save=()=>{onUpdate({...file,name:eName,desc:eDesc});setEditing(false);toast('Updated','ok')};
+  const addTag=()=>{if(ti.trim()&&!file.tags.includes(ti.trim())){onUpdate({...file,tags:[...file.tags,ti.trim()]});setTi('')}};
+  const rmTag=t=>onUpdate({...file,tags:file.tags.filter(x=>x!==t)});
+
+  const toggleConn=tid=>{
+    const cur=file.connections||[];
+    if(cur.includes(tid)){onUpdate({...file,connections:cur.filter(x=>x!==tid)});return;}
+    // DAG cycle check
+    const edges=files.flatMap(f=>(f.connections||[]).map(c=>[f.id,c]));
+    const vis=new Set();
+    const dfs=node=>{if(node===file.id)return true;if(vis.has(node))return false;vis.add(node);return edges.filter(e=>e[0]===node).some(e=>dfs(e[1]))};
+    if(dfs(tid)){toast('⚠ Cycle detected — DAG constraint violated!','err');return;}
+    onUpdate({...file,connections:[...cur,tid]});
+    toast('Linked successfully','ok');
+  };
+
+  useEffect(()=>{setEName(file.name);setEDesc(file.desc||'');setEditing(false)},[file.id]);
+
+  return(
+    <div className="detail-panel">
+      <div className="dp-header">
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:24}}>{ft.icon}</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text)',lineHeight:1.3,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{file.name}</div>
+            <div style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:2}}>{ft.label} · {fmtSz(file.size)}</div>
+          </div>
+        </div>
+        <button className="close-btn" onClick={onClose}>✕</button>
+      </div>
+      <div className="dp-body">
+        <div className="dp-preview">
+          <div style={{fontSize:48}}>{ft.icon}</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:8,fontFamily:'var(--mono)'}}>{file.name}</div>
+          <div style={{marginTop:12,display:'flex',gap:6,justifyContent:'center'}}>
+            <button className="btn btn-ghost btn-xs">👁 Preview</button>
+            <button className="btn btn-ghost btn-xs">⬇ Download</button>
+          </div>
+        </div>
+
+        {editing?(
+          <>
+            <div className="fg"><label className="fl">File name</label><input value={eName} onChange={e=>setEName(e.target.value)}/></div>
+            <div className="fg"><label className="fl">Description</label><textarea value={eDesc} onChange={e=>setEDesc(e.target.value)} rows={3}/></div>
+            <div style={{display:'flex',gap:7}}>
+              <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(false)}>Cancel</button>
+            </div>
+          </>
+        ):(
+          <>
+            <div className="dp-sec">
+              <div className="dp-sec-title">Description</div>
+              <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.7}}>{file.desc||<span style={{color:'var(--text3)'}}>No description</span>}</div>
+              <button className="btn btn-ghost btn-sm" style={{marginTop:8}} onClick={()=>setEditing(true)}>✏ Edit</button>
+            </div>
+
+            <div className="dp-sec">
+              <div className="dp-sec-title">Tags</div>
+              <div className="chip-wrap" onClick={()=>document.getElementById('dp-tag-i')?.focus()}>
+                {file.tags.map(t=>{const c=cats.find(x=>x.name===t);return(
+                  <span key={t} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontFamily:'var(--mono)'}}>
+                    {t}<span style={{opacity:.6,cursor:'pointer',marginLeft:5}} onClick={()=>rmTag(t)}>✕</span>
+                  </span>
+                )})}
+                <input id="dp-tag-i" className="chip-inner" value={ti} onChange={e=>setTi(e.target.value)}
+                  placeholder="Add tag…" onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addTag()}}}/>
+              </div>
+            </div>
+
+            <div className="dp-sec">
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div className="dp-sec-title" style={{marginBottom:0}}>Connections ({conns.length})</div>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setShowConn(p=>!p)}>
+                  {showConn?'Done':'+ Add'}
+                </button>
+              </div>
+              {showConn&&(
+                <div style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:8,marginBottom:10,maxHeight:170,overflowY:'auto'}}>
+                  {files.filter(f=>f.id!==file.id).map(f=>(
+                    <div key={f.id} className="conn-item" onClick={()=>toggleConn(f.id)}>
+                      <div className={`conn-chk${(file.connections||[]).includes(f.id)?' on':''}`}>{(file.connections||[]).includes(f.id)&&'✓'}</div>
+                      <span style={{fontSize:16}}>{getFT(f.name).icon}</span>
+                      <span style={{fontSize:12,color:'var(--text2)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {[...conns.map(f=>({...f,dir:'→'})),...revConns.map(f=>({...f,dir:'←'}))].map(f=>(
+                <div key={f.id+f.dir} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{fontSize:15}}>{getFT(f.name).icon}</span>
+                  <span style={{fontSize:12,color:'var(--text2)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+                  <span style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)'}}>{f.dir}</span>
+                </div>
+              ))}
+              {!conns.length&&!revConns.length&&<div style={{fontSize:12,color:'var(--text3)'}}>No connections</div>}
+            </div>
+
+            <div className="dp-sec">
+              <div className="dp-sec-title">File info</div>
+              {[['Created',fmtDt(file.created)],['Last accessed',fmtDt(file.accessed)],['Views',file.views],['Type',getFT(file.name).label],['Size',fmtSz(file.size)]].map(([k,v])=>(
+                <div key={k} className="dp-row"><span className="dp-key">{k}</span><span className="dp-val">{v}</span></div>
+              ))}
+            </div>
+
+            <button className="btn btn-danger" style={{width:'100%',justifyContent:'center',marginTop:4}}
+              onClick={()=>{if(confirm(`Delete "${file.name}"?`)){onDelete(file.id);onClose();toast('File deleted','inf')}}}>
+              🗑 Delete File
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ DASHBOARD ══════════════════ */
+function Dashboard({files,cats,onUpload,onSelect,toast}){
+  const recent=useMemo(()=>[...files].sort((a,b)=>b.accessed-a.accessed).slice(0,6),[files]);
+  const freq=useMemo(()=>[...files].sort((a,b)=>b.views-a.views).slice(0,5),[files]);
+  const totalSz=files.reduce((s,f)=>s+f.size,0);
+  const edges=files.reduce((s,f)=>s+(f.connections?.length||0),0);
+  const tagMap={};files.forEach(f=>f.tags.forEach(t=>{tagMap[t]=(tagMap[t]||0)+1}));
+  const topTags=Object.entries(tagMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  return(
+    <div style={{overflowY:'auto',height:'100%'}}>
+      <div className="stats-strip">
+        {[['Files',files.length,'⬡','Total in vault'],['Storage',fmtSz(totalSz),'💾','Vault size'],['Connections',edges,'🔗','Graph edges'],['Categories',cats.length,'🏷','Active tags']].map(([l,v,i,s])=>(
+          <div key={l} className="stat-cell">
+            <div style={{fontSize:20,marginBottom:8,opacity:.7}}>{i}</div>
+            <div className="stat-val">{v}</div>
+            <div className="stat-lbl">{l}</div>
+            <div className="stat-sub">{s}</div>
+          </div>
+        ))}
+      </div>
+      <div className="dash-grid">
+        <div>
+          <div className="section-title">Recently Accessed</div>
+          <div className="mini-grid">
+            {recent.map(f=>{const ft=getFT(f.name);return(
+              <div key={f.id} className="fcard" onClick={()=>onSelect(f)} style={{padding:14}}>
+                <div className="ficon" style={{background:ft.color+'1a',width:38,height:38,fontSize:18,marginBottom:10}}>{ft.icon}</div>
+                <div className="fname" style={{fontSize:12}}>{f.name}</div>
+                <div className="fmeta">{ago(f.accessed)}</div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:8}}>
+                  {f.tags.slice(0,2).map(t=>{const c=cats.find(x=>x.name===t);return(
+                    <span key={t} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontSize:10,padding:'1px 7px',fontFamily:'var(--mono)'}}>
+                      {t}
+                    </span>
+                  )})}
+                </div>
+              </div>
+            )})}
+          </div>
+
+          <div className="section-title" style={{marginTop:28}}>All Tags</div>
+          <div className="gm-tags">
+            {topTags.map(([tag,cnt])=>{const c=cats.find(x=>x.name===tag);return(
+              <span key={tag} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontSize:12,padding:'5px 12px',fontFamily:'var(--mono)'}}>
+                {tag} <span style={{opacity:.5}}>({cnt})</span>
+              </span>
+            )})}
+          </div>
+        </div>
+
+        <div>
+          <div className="section-title">Most Accessed</div>
+          {freq.map((f,i)=>(
+            <div key={f.id} className="rank-item" onClick={()=>onSelect(f)}>
+              <div className="rank-num">#{i+1}</div>
+              <span style={{fontSize:18}}>{getFT(f.name).icon}</span>
+              <div style={{flex:1,overflow:'hidden'}}>
+                <div style={{fontSize:12,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</div>
+                <div style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>{f.views} views</div>
+              </div>
+            </div>
+          ))}
+
+          <div className="section-title" style={{marginTop:24}}>Recent Activity</div>
+          {ACTS.map(a=>(
+            <div key={a.id} className="act-item">
+              <div className="act-dot" style={{background:a.type==='upload'?'var(--green)':a.type==='link'?'var(--accent)':a.type==='cat'?'var(--purple)':'var(--amber)'}}/>
+              <div>
+                <div className="act-txt">{a.text}</div>
+                <div className="act-time">{ago(a.time)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════ SEARCH ══════════════════ */
+function Search({files,cats,q,onSelect}){
+  const results=useMemo(()=>{
+    if(!q.trim())return[];
+    const lq=q.toLowerCase();
+    return files.filter(f=>f.name.toLowerCase().includes(lq)||f.tags.some(t=>t.toLowerCase().includes(lq))||f.desc?.toLowerCase().includes(lq));
+  },[files,q]);
+  const hl=str=>{const lq=q.toLowerCase(),i=str.toLowerCase().indexOf(lq);if(i===-1)return str;return<>{str.slice(0,i)}<span className="shigh">{str.slice(i,i+lq.length)}</span>{str.slice(i+lq.length)}</>;};
+  if(!q.trim())return(
+    <div className="empty">
+      <div className="empty-ico">⬡</div>
+      <div className="empty-title">Search the Vault</div>
+      <div className="empty-sub">Search by file name, tags, or description text</div>
+    </div>
+  );
+  if(!results.length)return(
+    <div className="empty">
+      <div className="empty-ico">∅</div>
+      <div className="empty-title">No results</div>
+      <div className="empty-sub">Try different keywords or check spelling</div>
+    </div>
+  );
+  return(
+    <div style={{padding:24}}>
+      <div style={{fontSize:12,color:'var(--text3)',marginBottom:16,fontFamily:'var(--mono)'}}>{results.length} result{results.length!==1?'s':''} for "{q}"</div>
+      {results.map(f=>{const ft=getFT(f.name);return(
+        <div key={f.id} className="sresult" onClick={()=>onSelect(f)}>
+          <span style={{fontSize:22}}>{ft.icon}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:500}}>{hl(f.name)}</div>
+            {f.desc&&<div style={{fontSize:11,color:'var(--text3)'}}>{hl(f.desc)}</div>}
+          </div>
+          <div style={{display:'flex',gap:4,flexWrap:'wrap',justifyContent:'flex-end',maxWidth:180}}>
+            {f.tags.filter(t=>t.toLowerCase().includes(q.toLowerCase())).slice(0,2).map(t=>{const c=cats.find(x=>x.name===t);return(
+              <span key={t} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontSize:10,fontFamily:'var(--mono)'}}>
+                {t}
+              </span>
+            )})}
+          </div>
+          <span style={{fontSize:11,color:'var(--text3)',marginLeft:8,fontFamily:'var(--mono)',flexShrink:0}}>{ago(f.accessed)}</span>
+        </div>
+      )})}
+    </div>
+  );
+}
+
+/* ══════════════════ CONTEXT MENU ══════════════════ */
+function CtxMenu({x,y,file,onClose,onSelect,onDelete,toast}){
+  useEffect(()=>{const h=()=>onClose();document.addEventListener('mousedown',h,true);return()=>document.removeEventListener('mousedown',h,true)},[]);
+  return(
+    <div className="ctxm" style={{top:y,left:x}} onClick={e=>e.stopPropagation()}>
+      <div className="ctxm-item" onClick={()=>{onSelect(file);onClose()}}>👁 View details</div>
+      <div className="ctxm-item" onClick={()=>{toast('Download started','inf');onClose()}}>⬇ Download</div>
+      <div className="ctxm-item" onClick={()=>{navigator.clipboard?.writeText(file.name).catch(()=>{});toast('Name copied','ok');onClose()}}>📋 Copy name</div>
+      <div className="ctxm-sep"/>
+      <div className="ctxm-item ctxm-danger" onClick={()=>{onDelete(file.id);onClose();toast('File deleted','inf')}}>🗑 Delete</div>
+    </div>
+  );
+}
+
+/* ══════════════════ MAIN APP ══════════════════ */
+function App(){
+  const[user,setUser]=useState(null);
+  const[files,setFiles]=useState(FILES0);
+  const[cats]=useState(CATS);
+  const[view,setView]=useState('dashboard');
+  const[sel,setSel]=useState(null);
+  const[showUp,setShowUp]=useState(false);
+  const[q,setQ]=useState('');
+  const[vm,setVm]=useState('grid');
+  const[ctx,setCtx]=useState(null);
+  const[sidebarNarrow,setSidebarNarrow]=useState(false);
+  const{toasts,toast,dismiss}=useToast();
+
+  const pickFile=f=>{setSel(f);setFiles(p=>p.map(x=>x.id===f.id?{...x,views:x.views+1,accessed:Date.now()}:x))};
+  const addFile=f=>setFiles(p=>[f,...p]);
+  const delFile=id=>{setFiles(p=>p.filter(x=>x.id!==id).map(x=>({...x,connections:(x.connections||[]).filter(c=>c!==id)})));if(sel?.id===id)setSel(null)};
+  const updFile=f=>setFiles(p=>p.map(x=>x.id===f.id?f:x));
+  const doSearch=v=>{setQ(v);if(v.trim())setView('search')};
+  const onCtx=(e,f)=>{e.preventDefault();setCtx({x:Math.min(e.clientX,window.innerWidth-200),y:Math.min(e.clientY,window.innerHeight-220),file:f})};
+
+  const filtered=useMemo(()=>{
+    if(view.startsWith('cat_')){const n=view.slice(4);return files.filter(f=>f.tags.includes(n))}
+    return files;
+  },[files,view]);
+
+  const navItems=[
+    {id:'dashboard',icon:'⊞',label:'Dashboard'},
+    {id:'files',icon:'📁',label:'All Files',badge:files.length},
+    {id:'graph',icon:'⬡',label:'Graph View'},
+    {id:'search',icon:'🔍',label:'Search'},
+  ];
+
+  if(!user)return<Auth onAuth={u=>{setUser(u);toast(`Welcome, ${u.name.split(' ')[0]}!`,'ok')}}/>;
+
+  const curLabel=view==='dashboard'?'Dashboard':view==='files'?'All Files':view==='graph'?'Graph View':view==='search'?'Search':view.startsWith('cat_')?view.slice(4):view;
+
+  return(
+    <div className="shell">
+      {/* SIDEBAR */}
+      <div className={`sidebar${sidebarNarrow?' narrow':''}`}>
+        <div className="logo-wrap">
+          <div className="logo-mark">⬡</div>
+          {!sidebarNarrow&&<div><div className="logo-name">GraphFlow</div><div className="logo-tag">// dag file system</div></div>}
+        </div>
+        <div className="nav-area">
+          {navItems.map(n=>(
+            <div key={n.id} className={`nav-btn${view===n.id?' on':''}`} onClick={()=>{setView(n.id);if(n.id!=='search')setQ('')}}>
+              <span className="ni">{n.icon}</span>
+              {!sidebarNarrow&&<>{n.label}{n.badge!==undefined&&<span className="badge">{n.badge}</span>}</>}
+            </div>
+          ))}
+          {!sidebarNarrow&&(
+            <>
+              <div className="nav-section-label" style={{marginTop:16}}>Categories</div>
+              {cats.map(c=>(
+                <div key={c.id} className={`cat-pill${view==='cat_'+c.name?' on':''}`} onClick={()=>setView('cat_'+c.name)}>
+                  <div className="cat-dot" style={{background:c.color}}/>
+                  <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</span>
+                  <span className="cat-count">{files.filter(f=>f.tags.includes(c.name)).length}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        {!sidebarNarrow&&(
+          <div className="user-foot">
+            <div className="user-card">
+              <div className="ava">{user.ava}</div>
+              <div style={{flex:1,overflow:'hidden'}}>
+                <div style={{fontSize:13,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</div>
+                <div style={{fontSize:11,color:'var(--text3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'var(--mono)'}}>{user.email}</div>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{width:'100%',justifyContent:'center',marginTop:6,fontSize:12}} onClick={()=>setUser(null)}>
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* MAIN */}
+      <div className="main">
+        <div className="topbar">
+          <button className="toggle-btn" onClick={()=>setSidebarNarrow(p=>!p)} title="Toggle sidebar">
+            {sidebarNarrow?'▶':'◀'}
+          </button>
+          <div className="breadcrumb" style={{display:'flex',alignItems:'center',gap:6,fontSize:13,flexShrink:0}}>
+            <span className="bc-link" onClick={()=>setView('dashboard')}>Home</span>
+            {view!=='dashboard'&&<><span className="bc-sep">›</span><span className="bc-cur">{curLabel}</span></>}
+          </div>
+          <div className="search-box">
+            <span className="search-ico">🔍</span>
+            <input value={q} onChange={e=>doSearch(e.target.value)} placeholder="Search files, tags…"/>
+          </div>
+          <div className="tb-actions">
+            {view!=='graph'&&(
+              <div className="vt">
+                <div className={`vt-btn${vm==='grid'?' on':''}`} onClick={()=>setVm('grid')} title="Grid">⊞</div>
+                <div className={`vt-btn${vm==='list'?' on':''}`} onClick={()=>setVm('list')} title="List">☰</div>
+              </div>
+            )}
+            <button className="btn btn-primary" onClick={()=>setShowUp(true)}>
+              <span style={{fontSize:16,lineHeight:1}}>+</span> Upload
+            </button>
+            <div className="ava" style={{cursor:'pointer'}} onClick={()=>setUser(null)} title="Click to sign out">{user.ava}</div>
+          </div>
+        </div>
+
+        <div className="content-area">
+          <div className="content-scroll">
+            {view==='dashboard'&&<Dashboard files={files} cats={cats} onUpload={()=>setShowUp(true)} onSelect={pickFile} toast={toast}/>}
+
+            {(view==='files'||view.startsWith('cat_'))&&(
+              <>
+                <div className="page-header">
+                  <div className="page-title">{view.startsWith('cat_')?view.slice(4):'All Files'}</div>
+                  <div className="page-count">{filtered.length} files</div>
+                </div>
+                {filtered.length===0?(
+                  <div className="empty">
+                    <div className="empty-ico">📭</div>
+                    <div className="empty-title">Nothing here yet</div>
+                    <div className="empty-sub">Upload files to this category to see them here</div>
+                    <button className="btn btn-primary" onClick={()=>setShowUp(true)}>+ Upload File</button>
+                  </div>
+                ):vm==='grid'?(
+                  <div className="file-grid">
+                    {filtered.map(f=><FCard key={f.id} file={f} cats={cats} onSelect={pickFile} onCtx={onCtx} sel={sel?.id===f.id}/>)}
+                  </div>
+                ):(
+                  <div className="list-wrap">
+                    <div className="list-head"><div>Name</div><div>Size</div><div>Tags</div><div>Links</div><div>Views</div></div>
+                    {filtered.map(f=>(
+                      <div key={f.id} className={`list-row${sel?.id===f.id?' sel':''}`} onClick={()=>pickFile(f)} onContextMenu={e=>onCtx(e,f)}>
+                        <div style={{display:'flex',alignItems:'center',gap:10}}>
+                          <span style={{fontSize:18,flexShrink:0}}>{getFT(f.name).icon}</span>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:240}}>{f.name}</div>
+                            <div style={{fontSize:11,color:'var(--text3)',fontFamily:'var(--mono)'}}>{ago(f.accessed)}</div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{fmtSz(f.size)}</div>
+                        <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                          {f.tags.slice(0,2).map(t=>{const c=cats.find(x=>x.name===t);return(
+                            <span key={t} className="tag" style={{background:(c?.color||'#4f8eff')+'18',color:c?.color||'#4f8eff',border:`1px solid ${(c?.color||'#4f8eff')}28`,fontSize:10,fontFamily:'var(--mono)'}}>
+                              {t}
+                            </span>
+                          )})}
+                          {f.tags.length>2&&<span style={{fontSize:11,color:'var(--text3)'}}>+{f.tags.length-2}</span>}
+                        </div>
+                        <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>⬡ {f.connections?.length||0}</div>
+                        <div style={{fontSize:12,color:'var(--text3)',fontFamily:'var(--mono)'}}>{f.views}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {view==='graph'&&<GraphView files={files} cats={cats} onSelect={pickFile} active={sel} toast={toast}/>}
+            {view==='search'&&<Search files={files} cats={cats} q={q} onSelect={pickFile}/>}
+          </div>
+
+          {sel&&<Detail file={sel} files={files} cats={cats} onClose={()=>setSel(null)} onUpdate={updFile} onDelete={delFile} toast={toast}/>}
+        </div>
+      </div>
+
+      {showUp&&<UploadModal cats={cats} onClose={()=>setShowUp(false)} onUpload={addFile} toast={toast}/>}
+      {ctx&&<CtxMenu x={ctx.x} y={ctx.y} file={ctx.file} onClose={()=>setCtx(null)} onSelect={pickFile} onDelete={delFile} toast={toast}/>}
+      <Toasts toasts={toasts} dismiss={dismiss}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
